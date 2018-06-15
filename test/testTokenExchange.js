@@ -49,7 +49,7 @@ contract('ERC20TokenExchange', accounts => {
 
 		var errorThrown = false;
 		try {
-			await exchange.fillSellOrder(token.address, account0, 1000, 1, {
+			await exchange.fillSellOrder(token.address, account0, 1000, 1000, 1, {
 				from: account1,
 				value: 1000
 			})
@@ -90,7 +90,7 @@ contract('ERC20TokenExchange', accounts => {
 
 		var errorThrown = false;
 		try {
-			await exchange.fillSellOrder(token.address, account0, 100, 21, {
+			await exchange.fillSellOrder(token.address, account0, 100, 10000, 21, {
 				from: account1,
 				value: 210000
 			})
@@ -108,7 +108,7 @@ contract('ERC20TokenExchange', accounts => {
 
 		var errorThrown = false;
 		try {
-			await exchange.fillSellOrder(token.address, account0, 1000, 1, {
+			await exchange.fillSellOrder(token.address, account0, 1000, 10000, 1, {
 				from: account1,
 				value: 10000
 			})
@@ -126,7 +126,7 @@ contract('ERC20TokenExchange', accounts => {
 
 		var errorThrown = false;
 		try {
-			await exchange.fillSellOrder(token.address, account0, 100, 1, {
+			await exchange.fillSellOrder(token.address, account0, 100, 10000, 1, {
 				from: account1,
 				value: 1000
 			})
@@ -145,10 +145,10 @@ contract('ERC20TokenExchange', accounts => {
 		var account1Token = await token.balanceOf.call(account1);
 		assert.equal(account1Token.toNumber(), 0);
 
-		await exchange.fillSellOrder(token.address, account0, 100, 10, {
+		await exchange.fillSellOrder(token.address, account0, 100, 10000, 10, {
 			from: account1,
 			value: 100000
-		})
+		});
 
 		account1Token = await token.balanceOf.call(account1);
 		assert.equal(account1Token.toNumber(), 1000);
@@ -156,10 +156,21 @@ contract('ERC20TokenExchange', accounts => {
 		var allowanceToken = await token.allowance.call(account0, exchange.address);
 		assert.equal(allowanceToken.toNumber(), 1000);
 
-		await exchange.fillSellOrder(token.address, account0, 100, 10, {
+		// deposit before fill sell order
+		await exchange.deposit({
 			from: account1,
-			value: 100000
-		})
+			value: 90000
+		});
+
+		await exchange.fillSellOrder(token.address, account0, 100, 10000, 6, {
+			from: account1,
+			value: 10000
+		});
+
+		// Fill sell order with deposit
+		await exchange.fillSellOrder(token.address, account0, 100, 10000, 4, {
+			from: account1
+		});
 
 		account1Token = await token.balanceOf.call(account1);
 		assert.equal(account1Token.toNumber(), 2000);
@@ -169,14 +180,14 @@ contract('ERC20TokenExchange', accounts => {
 
 	})
 
-	it('Should not fill sell order with zero lot', async function () {
+	it('Should not fill sell order without available lot', async function () {
 
 		const token = await MockToken.deployed();
 		const exchange = await ERC20TokenExchange.deployed();
 
 		var errorThrown = false;
 		try {
-			await exchange.fillSellOrder(token.address, account0, 100, 10, {
+			await exchange.fillSellOrder(token.address, account0, 100, 10000, 10, {
 				from: account1,
 				value: 100000
 			})
@@ -204,15 +215,39 @@ contract('ERC20TokenExchange', accounts => {
 
 	})
 
+	it('Should put buy order and deposit at the same time', async function () {
+
+		const token = await MockToken.deployed();
+		const exchange = await ERC20TokenExchange.deployed();
+
+		await exchange.putBuyOrder(token.address, 1000, 1000, 1, {
+			from: account2,
+			value: 1000
+		})
+
+	})
+
 	it('Should deposit ether before putting buyer order', async function () {
 
 		const token = await MockToken.deployed();
 		const exchange = await ERC20TokenExchange.deployed();
 
-		await exchange.sendTransaction({
+		await exchange.deposit({
 			from: account2,
-			value: 2000
+			value: 500
 		});
+
+	})
+
+	it('Should put buy order and deposit at the same time', async function () {
+
+		const token = await MockToken.deployed();
+		const exchange = await ERC20TokenExchange.deployed();
+
+		await exchange.putBuyOrder(token.address, 1000, 1000, 2, {
+			from: account2,
+			value: 500
+		})
 
 	})
 
