@@ -26,3 +26,6 @@ A zero fee ERC20 token exchange smart contract
 TODO
 ### Client side tool - Order assistance 
 TODO
+
+## Test Contract
+https://ropsten.etherscan.io/address/0xb526dbb0d8cb0027a15317e677b36940cac4b132
