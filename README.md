@@ -8,24 +8,23 @@ A zero fee ERC20 token exchange smart contract
 
 ## HOW
 
-### How sell order works
+### How to sell token in exchange for ETH
 1. **SELLER** approves the exchange contract to spend token on his/her behalf
-2. **SELLER** puts a sell order
-3. **BUYER** fills the sell order and pay ether
-4. **SELLER** withdraws ether from exchange contract
+2. **SELLER** puts a sell order into exchange and wait for **BUYER** to fill it
+3. or **SELLER** fill an oustanding buy order
 
-### How buy order works
+### How to buy token with ETH
 1. **BUYER** deposit ether into the exchange contract
-2. **BUYER** puts a buy order
-3. **SELLER** approves the exchange contract to spend token on his/her behalf
-4. **SELLER** fills the buy order giving token out and receiving deposit from **BUYER**
-5. **SELLER** withdraws ether from exchange contract
+2. **BUYER** puts a buy order into exchange and wait for **SELLER** to fill it
+3. or **BUYER** fill an oustanding sell order
 
 ## Usage
+### Decentralized APP - ERC20 Token Exchange
+https://wanglingsong.github.io/ERC20ExchangeReactUI
+
+This DAPP requires [MetaMask](https://metamask.io) installed in your Chrome browser.
 ### Web platform - Centralized order matching engine
 TODO
-### Client side tool - Order assistance 
-TODO
 
-## Test Contract
-https://ropsten.etherscan.io/address/0x550af71a5073b017f13ad4e8afc482d0e2275d67
+## Contract in Ropsten testnet
+https://ropsten.etherscan.io/address/0xc055a14929b2edb5b5a420b26ac622f6952e9542
