@@ -2,21 +2,86 @@ pragma solidity ^0.4.23;
 
 
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "../node_modules/openzeppelin-solidity/contracts/payment/PullPayment.sol";
+// import "../node_modules/openzeppelin-solidity/contracts/payment/PullPayment.sol";
 import "../node_modules/openzeppelin-solidity/contracts/ReentrancyGuard.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "../node_modules/openzeppelin-solidity/contracts/token/ERC20/SafeERC20.sol";
 
 
-contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
+contract AdvancedPullPayment is ReentrancyGuard {
+    
+    using SafeMath for uint256;
+
+    // event Withdraw(address indexed _payee, uint256 _payment);
+    event DepositUpdated(address indexed _payee, uint256 _payment);
+
+    mapping(address => uint256) public payments;
+    // uint256 public totalPayments;
+
+    /**
+    * @dev Withdraw accumulated balance, called by payee.
+    */
+    function withdraw(uint256 amount) public nonReentrant {
+        require(amount != 0);
+
+        address payee = msg.sender;
+        uint256 payment = payments[payee];
+
+        require(payment != 0);
+        require(payment >= amount && address(this).balance >= amount);
+
+        // totalPayments = totalPayments.sub(payment);
+        uint256 updated = payment.sub(amount);
+        payments[payee] = updated;
+
+        payee.transfer(amount);
+        emit DepositUpdated(payee, updated);
+    }
+
+    function deposit() public payable nonReentrant {
+        require(msg.value != 0);
+        asyncSend(msg.sender, msg.value);
+    }
+
+    /**
+    * @dev Called by the payer to store the sent amount as credit to be pulled.
+    * @param dest The destination address of the funds.
+    * @param amount The amount to transfer.
+    */
+    function asyncSend(address dest, uint256 amount) internal {
+        uint256 updated = payments[dest].add(amount);
+        payments[dest] = updated;
+        // totalPayments = totalPayments.add(amount);
+        emit DepositUpdated(dest, updated);
+    }
+
+    function asyncSendSilently(address dest, uint256 amount) internal {
+        payments[dest] = payments[dest].add(amount);
+    }
+
+    function asyncTransfer(address src, address dest, uint256 amount) internal {
+        uint256 balance = payments[src];
+        require(balance >= amount);
+        uint256 fromBalance = balance.sub(amount);
+        uint256 toBalance = payments[dest].add(amount);
+        payments[src] = fromBalance;
+        payments[dest] = toBalance;
+        emit DepositUpdated(src, fromBalance);
+        emit DepositUpdated(dest, toBalance);
+    }
+
+}
+
+
+contract ERC20TokenExchange is AdvancedPullPayment {
 
     using SafeMath for uint256;
 
-    event SellOrderPut(address _erc20TokenAddress, address _seller, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
-    event SellOrderFilled(address _erc20TokenAddress, address _seller, address _buyer, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
+    event SellOrderPut(address indexed _erc20TokenAddress, address indexed _seller, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
+    event SellOrderFilled(address indexed _erc20TokenAddress, address indexed _seller, address indexed _buyer, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
 
-    event BuyOrderPut(address _erc20TokenAddress, address _buyer, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
-    event BuyOrderFilled(address _erc20TokenAddress, address _buyer, address _seller, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
+    event BuyOrderPut(address indexed _erc20TokenAddress, address indexed _buyer, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
+    event BuyOrderFilled(address indexed _erc20TokenAddress, address indexed _buyer, address indexed _seller, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _numOfLot);
 
     struct Order {
 
@@ -29,10 +94,6 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
     mapping(address => mapping(address => Order)) public sellOrders;
     mapping(address => mapping(address => Order)) public buyOrders;
 
-    function deposit() public payable nonReentrant {
-        require(msg.value != 0);
-        asyncSend(msg.sender, msg.value);
-    }
 
     function putSellOrder(address _erc20TokenAddress, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _lotToSell) public nonReentrant {
 
@@ -41,15 +102,16 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
         require(_pricePerLot != 0);
         require(_lotToSell != 0);
 
-        Order storage order = sellOrders[_erc20TokenAddress][msg.sender];
+        address seller = msg.sender;
+        Order storage order = sellOrders[_erc20TokenAddress][seller];
         order.tokenPerLot = _tokenPerLot;
         order.pricePerLot = _pricePerLot;
         order.numOfLot = _lotToSell;
 
         ERC20 erc20 = ERC20(_erc20TokenAddress);
-        require(hasSufficientTokenInternal(erc20, msg.sender, _lotToSell.mul(_tokenPerLot)));
+        require(hasSufficientTokenInternal(erc20, seller, _lotToSell.mul(_tokenPerLot)));
 
-        emit SellOrderPut(_erc20TokenAddress, msg.sender, _tokenPerLot, _pricePerLot, _lotToSell);
+        emit SellOrderPut(_erc20TokenAddress, seller, _tokenPerLot, _pricePerLot, _lotToSell);
     }
 
     function fillSellOrder(address _erc20TokenAddress, address _seller, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _lotToBuy) public payable nonReentrant {
@@ -66,17 +128,19 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
 
         uint256 payment = _pricePerLot.mul(_lotToBuy);
         require(payment != 0);
+        address buyer = msg.sender;
+        uint256 cash = msg.value;
 
-        if (payment < msg.value) {
+        if (payment < cash) {
             asyncSend(_seller, payment);
-            asyncSend(msg.sender, msg.value.sub(payment));
-        } else if (payment == msg.value) {
+            asyncSend(buyer, cash.sub(payment));
+        } else if (payment == cash) {
             asyncSend(_seller, payment);
         } else {
-            if (msg.value != 0) {
-                asyncSend(msg.sender, msg.value);
+            if (cash != 0) {
+                asyncSendSilently(buyer, cash);
             }
-            asyncTransfer(msg.sender, _seller, payment);
+            asyncTransfer(buyer, _seller, payment);
         }
 
         order.numOfLot = numOfLot.sub(_lotToBuy);
@@ -84,9 +148,9 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
         uint256 amoutToBuy = _lotToBuy.mul(_tokenPerLot);
 
         ERC20 erc20 = ERC20(_erc20TokenAddress);
-        safeSafeTransferFrom(erc20, _seller, msg.sender, amoutToBuy);
+        safeSafeTransferFrom(erc20, _seller, buyer, amoutToBuy);
         
-        emit SellOrderFilled(_erc20TokenAddress, _seller, msg.sender, _tokenPerLot, _pricePerLot, _lotToBuy);
+        emit SellOrderFilled(_erc20TokenAddress, _seller, buyer, _tokenPerLot, _pricePerLot, _lotToBuy);
     }
 
     function putBuyOrder(address _erc20TokenAddress, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _lotToBuy) public payable nonReentrant {
@@ -96,17 +160,18 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
         require(_pricePerLot != 0);
         require(_lotToBuy != 0);
 
+        address buyer = msg.sender;
         if (msg.value != 0) {
-            asyncSend(msg.sender, msg.value);
+            asyncSend(buyer, msg.value);
         }
-        require(hasSufficientPaymentInternal(msg.sender, _pricePerLot.mul(_lotToBuy)));            
+        require(hasSufficientPaymentInternal(buyer, _pricePerLot.mul(_lotToBuy)));            
 
-        Order storage order = buyOrders[_erc20TokenAddress][msg.sender];
+        Order storage order = buyOrders[_erc20TokenAddress][buyer];
         order.tokenPerLot = _tokenPerLot;
         order.pricePerLot = _pricePerLot;
         order.numOfLot = _lotToBuy;
 
-        emit BuyOrderPut(_erc20TokenAddress, msg.sender, _tokenPerLot, _pricePerLot, _lotToBuy);
+        emit BuyOrderPut(_erc20TokenAddress, buyer, _tokenPerLot, _pricePerLot, _lotToBuy);
     }
 
     function fillBuyOrder(address _erc20TokenAddress, address _buyer, uint256 _tokenPerLot, uint256 _pricePerLot, uint256 _lotToSell) public nonReentrant {
@@ -125,15 +190,16 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
 
         uint256 payment = _pricePerLot.mul(_lotToSell);
 
-        asyncTransfer(_buyer, msg.sender, payment);
+        address seller = msg.sender;
+        asyncTransfer(_buyer, seller, payment);
         order.numOfLot = numOfLot.sub(_lotToSell);
 
         ERC20 erc20 = ERC20(_erc20TokenAddress);
 
         uint256 amoutToSell = _lotToSell.mul(_tokenPerLot);
-        safeSafeTransferFrom(erc20, msg.sender, _buyer, amoutToSell);
+        safeSafeTransferFrom(erc20, seller, _buyer, amoutToSell);
 
-        emit SellOrderFilled(_erc20TokenAddress, _buyer, msg.sender, _tokenPerLot, _pricePerLot, _lotToSell);
+        emit BuyOrderFilled(_erc20TokenAddress, _buyer, seller, _tokenPerLot, _pricePerLot, _lotToSell);
     }
 
     function safeSafeTransferFrom(ERC20 _erc20, address _from, address _to, uint256 _amount) internal {
@@ -163,19 +229,12 @@ contract ERC20TokenExchange is PullPayment, ReentrancyGuard {
         return (order.tokenPerLot, order.pricePerLot, order.numOfLot);
     }
 
-    function asyncTransfer(address _from, address _to, uint256 amount) internal {
-        uint256 balance = payments[_from];
-        require(balance >= amount);
-        payments[_from] = balance.sub(amount);
-        payments[_to] = payments[_to].add(amount);
-    }
-
     function hasSufficientPaymentInternal(address _payee, uint256 _amount) internal view returns(bool) {
         return payments[_payee] >= _amount;
     }
 
     function hasSufficientTokenInternal(ERC20 erc20, address _seller, uint256 _amountToSell) internal view returns(bool) {
-        return erc20.allowance(_seller, address(this)) >= _amountToSell;
+        return erc20.balanceOf(_seller) >= _amountToSell && erc20.allowance(_seller, address(this)) >= _amountToSell;
     }
 
 }
