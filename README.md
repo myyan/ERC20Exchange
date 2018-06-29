@@ -1,9 +1,9 @@
 # ERC20Exchange
-A zero fee ERC20 token exchange smart contract
+A fee-free ERC20 token exchange smart contract
 
 ## WHY
 * **FREE**, no additional fee charged
-* **NEUTRAL**, having no owner
+* **FAIR**, having no owner
 * **SIMPLE**, just put and fill order
 
 ## HOW
@@ -19,12 +19,18 @@ A zero fee ERC20 token exchange smart contract
 3. or **BUYER** fill an oustanding sell order
 
 ## Usage
-### Decentralized APP - ERC20 Token Exchange
+### Decentralized APP - ERC20 Token Exchange(Beta test on the Ropsten testnet)
 https://wanglingsong.github.io/ERC20ExchangeReactUI
 
 This DAPP requires [MetaMask](https://metamask.io) installed in your Chrome browser.
+#### Unlock Metamask wallet
+![image](https://github.com/wanglingsong/ERC20Exchange/blob/master/gif/unlock-wallet.gif)
+#### Deposit ETH into exchange
+![image](https://github.com/wanglingsong/ERC20Exchange/blob/master/gif/deposit.gif)
+#### Submit a buy order
+![image](https://github.com/wanglingsong/ERC20Exchange/blob/master/gif/submit-bid.gif)
 ### Web platform - Centralized order matching engine
 TODO
 
-## Contract in Ropsten testnet
+## Contract on the Ropsten testnet
 https://ropsten.etherscan.io/address/0xc055a14929b2edb5b5a420b26ac622f6952e9542
